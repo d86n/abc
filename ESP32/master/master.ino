@@ -23,7 +23,7 @@ void setup() {
   WiFi.mode(WIFI_STA);
 
   if (esp_now_init() != ESP_OK) {
-    Serial.println("ESP-NOW init thất bại");
+    Serial.println("ESP-NOW thất bại");
     while (1);
   }
 
@@ -41,8 +41,6 @@ void setup() {
   esp_now_add_peer(&peerInfo);
 
   esp_now_register_send_cb(OnDataSent);
-
-  Serial.println("ESP32 Master sẵn sàng...");
 }
 
 void loop() {
@@ -110,7 +108,6 @@ void loop() {
         esp_now_send(mac3, data, len);
         break;
       default:
-        Serial.println("Chỉ số MAC không hợp lệ. Chỉ chấp nhận 1, 2, hoặc 3.");
         break;
     }
   }
