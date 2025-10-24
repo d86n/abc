@@ -81,9 +81,9 @@ class ArUcoMarkers:
 
                 projected_points, _ = cv2.projectPoints(axis_points, rvec, tvec, self.camera_matrix, self.dist_coeffs)
 
-                origin = tuple(projected_points[0].ravel().astype(int))
-                x_axis = tuple(projected_points[1].ravel().astype(int))
-                y_axis = tuple(projected_points[2].ravel().astype(int))
+                origin = tuple(projected_points[0][0].astype(int))
+                x_axis = tuple(projected_points[1][0].astype(int))
+                y_axis = tuple(projected_points[2][0].astype(int))
 
                 cv2.arrowedLine(frame, origin, x_axis, (0, 0, 255), 2)
                 cv2.arrowedLine(frame, origin, y_axis, (0, 255, 0), 2)
@@ -103,7 +103,7 @@ class ArUcoMarkers:
 
                         center_3d = np.array([[0, 0, 0]], dtype=np.float32)
                         center_2d, _ = cv2.projectPoints(center_3d, rvec, tvec, self.camera_matrix, self.dist_coeffs)
-                        center_pixel = tuple(center_2d[0].ravel().astype(int))
+                        center_pixel = tuple(center_2d[0][0].astype(int))
 
                         text_pos = (center_pixel[0] + 20, center_pixel[1] - 20)
 

@@ -1,5 +1,5 @@
 numpy
 matplotlib
-opencv-python
 scipy
 pyserial
+opencv-contrib-python
