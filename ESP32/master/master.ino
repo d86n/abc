@@ -84,6 +84,31 @@ void loop() {
       case 3:
         esp_now_send(mac3, data, len);
         break;
+      case 12:
+      case 21:
+        esp_now_send(mac1, data, len);
+        esp_now_send(mac2, data, len);
+        break;
+      case 13:
+      case 31:
+        esp_now_send(mac1, data, len);
+        esp_now_send(mac3, data, len);
+        break;
+      case 23:
+      case 32:
+        esp_now_send(mac2, data, len);
+        esp_now_send(mac3, data, len);
+        break;
+      case 123:
+      case 132:
+      case 213:
+      case 231:
+      case 312:
+      case 321:
+        esp_now_send(mac1, data, len);
+        esp_now_send(mac2, data, len);
+        esp_now_send(mac3, data, len);
+        break;
       default:
         Serial.println("Chỉ số MAC không hợp lệ. Chỉ chấp nhận 1, 2, hoặc 3.");
         break;
