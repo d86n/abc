@@ -2,6 +2,40 @@ import ctypes
 import cv2
 import numpy as np
 
+def main():
+    camera = Camera()
+    camera_matrix, dist_coeffs = camera.load_data()
+    aruco_markers = ArUcoMarkers(camera_matrix, dist_coeffs)
+    processor = Processor(aruco_markers, camera)
+
+    frame, cap = camera.run()
+
+    while 1:
+        _, frame = cap.read()
+
+        _, ids, rvecs, tvecs = aruco_markers.detect_markers(frame)
+
+        aruco_markers.draw_local_reference_frame(ids, rvecs, tvecs, frame)
+
+        camera.frame = frame
+        camera.draw_global_reference_frame()
+
+        marker_positions = processor.get_markers_positions(ids, rvecs, tvecs)
+        if marker_positions is not None:
+            aruco_markers.show_marker_positions(frame, marker_positions, ids, rvecs, tvecs)
+
+        window_name = "Camera"
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        cv2.imshow(window_name, frame)
+
+        ctypes.windll.user32.ShowWindow(ctypes.windll.user32.FindWindowW(None, window_name), 3)
+
+        if cv2.waitKey(1) == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
 class Camera:
     def __init__(self):
         self.calib_data = np.load('calib_data.npz')
@@ -68,10 +102,10 @@ class ArUcoMarkers:
 
     def draw_local_reference_frame(self, ids, rvecs, tvecs, frame):
         axis_points = np.array([
-            [0, 0, 0],
-            [self.axis_length, 0, 0],
-            [0, self.axis_length, 0],
-            [0, 0, -self.axis_length]
+            [0,                               0,                 0],
+            [self.axis_length,                0,                 0],
+            [0,                self.axis_length,                 0],
+            [0,                               0, -self.axis_length]
         ], dtype=np.float32)
 
         if ids is not None and tvecs is not None and len(tvecs) > 0:
@@ -121,7 +155,6 @@ class ArUcoMarkers:
                                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
                         cv2.putText(frame, angle_text, (text_pos[0], text_pos[1] + 30),
                                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
-                        break
 
 class Processor:
     def __init__(self, aruco_markers, camera):
@@ -176,40 +209,6 @@ class Processor:
 
             return results
         return None
-
-def main():
-    camera = Camera()
-    camera_matrix, dist_coeffs = camera.load_data()
-    aruco_markers = ArUcoMarkers(camera_matrix, dist_coeffs)
-    processor = Processor(aruco_markers, camera)
-
-    frame, cap = camera.run()
-
-    while 1:
-        _, frame = cap.read()
-
-        _, ids, rvecs, tvecs = aruco_markers.detect_markers(frame)
-
-        aruco_markers.draw_local_reference_frame(ids, rvecs, tvecs, frame)
-
-        camera.frame = frame
-        camera.draw_global_reference_frame()
-
-        marker_positions = processor.get_markers_positions(ids, rvecs, tvecs)
-        if marker_positions is not None:
-            aruco_markers.show_marker_positions(frame, marker_positions, ids, rvecs, tvecs)
-
-        window_name = "Camera"
-        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-        cv2.imshow(window_name, frame)
-
-        ctypes.windll.user32.ShowWindow(ctypes.windll.user32.FindWindowW(None, window_name), 3)
-
-        if cv2.waitKey(1) == ord('q'):
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     main()
