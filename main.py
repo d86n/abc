@@ -12,30 +12,37 @@ def main():
     processor = Processor(aruco_markers, camera)
     serial_port = 'COM4'
     baud_rate = 115200
-    is_running = True
+
+    is_running_event = threading.Event()
+    is_running_event.set()
 
     ser = serial.Serial(serial_port, baud_rate, timeout=0.1, write_timeout=0, dsrdtr=False)
     print("Chờ ESP32 khởi động... (3 giây)")
     time.sleep(3)  # Cho ESP32 3 giây để khởi động lại
     print("ESP32 đã sẵn sàng.")
 
-    serial_reader_thread = threading.Thread(target=processor.read_serial, args=(ser, is_running))
+    serial_reader_thread = threading.Thread(target=processor.read_serial, args=(ser, is_running_event))
     serial_reader_thread.daemon = True
     serial_reader_thread.start()
 
-    processor.write_serial(ser)
+    serial_writer_thread = threading.Thread(target=processor.writer_loop,
+                                            args=(ser, is_running_event))
+    serial_writer_thread.daemon = True
+    serial_writer_thread.start()
 
-    frame, cap = camera.run()
-
-    while 1:
-        _, frame = cap.read()
+    while is_running_event.is_set():
+        ret, frame = camera.read_frame()
+        if not ret:
+            print("Lỗi camera, đang thoát...")
+            is_running_event.clear()  # Báo cho các luồng khác dừng
+            break
 
         _, ids, rvecs, tvecs = aruco_markers.detect_markers(frame)
 
         aruco_markers.draw_local_reference_frame(ids, rvecs, tvecs, frame)
 
         camera.frame = frame
-        camera.draw_global_reference_frame()
+        camera.draw_global_reference_frame(frame)
 
         marker_positions = processor.get_markers_positions(ids, rvecs, tvecs)
         if marker_positions is not None:
@@ -49,10 +56,15 @@ def main():
         ctypes.windll.user32.ShowWindow(ctypes.windll.user32.FindWindowW(None, window_name), 3)
 
         if cv2.waitKey(1) == ord('q'):
+            is_running_event.clear()
             break
 
-    cap.release()
+    camera.stop()
+
+    ser.close()
+
     cv2.destroyAllWindows()
+
 
 class Camera:
     def __init__(self):
@@ -62,37 +74,76 @@ class Camera:
 
         self.origin_position = (1800, 100)
 
+        # Mở camera
         self.cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
+        # Cài đặt thuộc tính ngay lập tức
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1900)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1000)
 
-        _, self.frame = self.cap.read()
+        # Đọc khung hình đầu tiên
+        ret, self.frame = self.cap.read()
+        if not ret:
+            raise ValueError("Không thể mở camera.")
 
-    def draw_global_reference_frame(self):
-        # Gốc toạ độ
-        cv2.circle(self.frame, self.origin_position, 3, (0, 0, 255), -1)
-        cv2.circle(self.frame, self.origin_position, 5, (255, 255, 255), 2)
+        # Cài đặt threading
+        self.is_running = True
+        self.lock = threading.Lock()  # Khóa để tránh race condition
+        self.thread = threading.Thread(target=self._update, daemon=True)
+        self.thread.start()
+        print("✅ PYTHON: Luồng Camera đã khởi động.")
 
+    def _update(self):
+        """Hàm chạy trong luồng riêng, liên tục cập nhật self.frame"""
+        while self.is_running:
+            ret, frame = self.cap.read()
+            if ret:
+                # Dùng khóa để ghi đè self.frame một cách an toàn
+                with self.lock:
+                    self.frame = frame
+            else:
+                # Dừng nếu camera bị ngắt kết nối
+                self.is_running = False
+
+    def read_frame(self):
+        """Lấy khung hình hiện tại (bản sao) một cách an toàn."""
+        with self.lock:
+            # Trả về một bản sao để tránh bị luồng _update ghi đè
+            # khi đang xử lý
+            if self.frame is None:
+                return False, None
+            frame_copy = self.frame.copy()
+        return True, frame_copy
+
+    def stop(self):
+        """Dừng luồng và giải phóng camera."""
+        self.is_running = False
+        self.thread.join()  # Đợi luồng kết thúc
+        self.cap.release()
+        print("...Luồng Camera đã dừng.")
+
+    def draw_global_reference_frame(self, frame_to_draw_on):
+        """
+        Vẽ hệ quy chiếu toàn cục LÊN KHUNG HÌNH ĐƯỢC CUNG CẤP.
+        (Sửa lại để nhận 'frame' làm tham số)
+        """
+        cv2.circle(frame_to_draw_on, self.origin_position, 3, (0, 0, 255), -1)
+        cv2.circle(frame_to_draw_on, self.origin_position, 5, (255, 255, 255), 2)
         axis_length = 150
-
         # Trục x
         x_end = (self.origin_position[0] - axis_length, self.origin_position[1])
-        cv2.arrowedLine(self.frame, self.origin_position, x_end, (0, 0, 255), 2)
-        cv2.putText(self.frame, 'x', (x_end[0] - 20, x_end[1]),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-
+        cv2.arrowedLine(frame_to_draw_on, self.origin_position, x_end, (0, 0, 255), 2)
+        cv2.putText(frame_to_draw_on, 'x', (x_end[0] - 20, x_end[1]),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
         # Trục y
         y_end = (self.origin_position[0], self.origin_position[1] + axis_length)
-        cv2.arrowedLine(self.frame, self.origin_position, y_end, (0, 255, 0), 2)
-        cv2.putText(self.frame, 'y', (y_end[0] + 10, y_end[1]),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+        cv2.arrowedLine(frame_to_draw_on, self.origin_position, y_end, (0, 255, 0), 2)
+        cv2.putText(frame_to_draw_on, 'y', (y_end[0] + 10, y_end[1]),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
     def load_data(self):
         return self.camera_matrix, self.dist_coeffs
 
-    def run(self):
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1900)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1000)
-
-        return self.frame, self.cap
+    # Hàm run(self) không còn cần thiết
 
 class ArUcoMarkers:
     def __init__(self, camera_matrix, dist_coeffs):
@@ -229,8 +280,8 @@ class Processor:
         return None
 
     @staticmethod
-    def read_serial(ser, is_running):
-        while is_running:
+    def read_serial(ser, is_running_event):
+        while is_running_event.is_set():
             try:
                 if ser.in_waiting > 0:
                     line_bytes = ser.readline()
@@ -245,15 +296,53 @@ class Processor:
     @staticmethod
     def write_serial(ser):
         try:
-            data = input("Định dạng: 'ID,vx,vy':")
+            # 1. Nhận input (Hàm này sẽ chặn luồng GỬI)
+            data_input_string = input("Định dạng: ID,vx,vy (hoặc 'exit' để thoát): ")
 
-            data_to_send = data + "\n"
+            # 2. Kiểm tra lệnh thoát
+            if data_input_string.lower() == 'exit':
+                return False  # Trả về False để báo hiệu DỪNG
 
-            ser.write(data_to_send.encode("utf-8"))
+            # 3. Kiểm tra định dạng (ví dụ: '1,2.2,3.3')
+            data_parts_list = data_input_string.split(',')
+            if len(data_parts_list) != 3:
+                print("Lỗi đầu vào: Phải nhập đúng 3 giá trị.")
+                return True  # Trả về True để TIẾP TỤC VÒNG LẶP
+
+            # Kiểm tra kiểu dữ liệu
+            int(data_parts_list[0].strip())
+            float(data_parts_list[1].strip())
+            float(data_parts_list[2].strip())
+
+            # 4. Gửi dữ liệu (dạng Text + '\n')
+            data_to_send = data_input_string + "\n"
+
+            print(f"✅ Python đang gửi chuỗi text: '{data_input_string}'")
+            ser.write(data_to_send.encode('utf-8'))
+
+            # 5. Trả về True để TIẾP TỤC VÒNG LẶP
+            return True
+
         except ValueError:
-            print("Lỗi: Sai kiểu dữ liệu.")
+            print("❌ Lỗi: Sai kiểu dữ liệu. Phải là số.")
+            return True  # Vẫn tiếp tục vòng lặp
         except serial.SerialException as e:
-            print(f"Lỗi Serial: {e}.")
+            print(f"❌ Lỗi Serial: {e}.")
+            return False  # Dừng nếu lỗi serial
+        except Exception as e:
+            print(f"❌ Lỗi không xác định: {e}")
+            return True  # Vẫn tiếp tục
+
+    def writer_loop(self, ser, is_running_event):
+        while is_running_event.is_set():
+            try:
+                if not self.write_serial(ser):
+                    is_running_event.clear()
+                    break
+            except EOFError:
+                print("...Luồng GỬI bị ngắt (EOF).")
+                is_running_event.clear()
+                break
 
 if __name__ == "__main__":
     main()
