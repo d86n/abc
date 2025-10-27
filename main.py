@@ -17,8 +17,7 @@ def main():
     is_running_event.set()
 
     ser = serial.Serial(serial_port, baud_rate, timeout=0.1, write_timeout=0, dsrdtr=False)
-    print("Chờ ESP32 khởi động... (3 giây)")
-    time.sleep(3)  # Cho ESP32 3 giây để khởi động lại
+    time.sleep(3)
     print("ESP32 đã sẵn sàng.")
 
     serial_reader_thread = threading.Thread(target=processor.read_serial, args=(ser, is_running_event))
@@ -90,7 +89,6 @@ class Camera:
         self.lock = threading.Lock()  # Khóa để tránh race condition
         self.thread = threading.Thread(target=self._update, daemon=True)
         self.thread.start()
-        print("✅ PYTHON: Luồng Camera đã khởi động.")
 
     def _update(self):
         """Hàm chạy trong luồng riêng, liên tục cập nhật self.frame"""
@@ -297,7 +295,7 @@ class Processor:
     def write_serial(ser):
         try:
             # 1. Nhận input (Hàm này sẽ chặn luồng GỬI)
-            data_input_string = input("Định dạng: ID,vx,vy (hoặc 'exit' để thoát): ")
+            data_input_string = input("Định dạng: 'ID,vx,vy' (hoặc 'exit' để thoát): ")
 
             # 2. Kiểm tra lệnh thoát
             if data_input_string.lower() == 'exit':
@@ -317,21 +315,17 @@ class Processor:
             # 4. Gửi dữ liệu (dạng Text + '\n')
             data_to_send = data_input_string + "\n"
 
-            print(f"✅ Python đang gửi chuỗi text: '{data_input_string}'")
             ser.write(data_to_send.encode('utf-8'))
 
             # 5. Trả về True để TIẾP TỤC VÒNG LẶP
             return True
 
         except ValueError:
-            print("❌ Lỗi: Sai kiểu dữ liệu. Phải là số.")
+            print("Lỗi: Sai kiểu dữ liệu. Phải là số.")
             return True  # Vẫn tiếp tục vòng lặp
         except serial.SerialException as e:
-            print(f"❌ Lỗi Serial: {e}.")
+            print(f"Lỗi Serial: {e}.")
             return False  # Dừng nếu lỗi serial
-        except Exception as e:
-            print(f"❌ Lỗi không xác định: {e}")
-            return True  # Vẫn tiếp tục
 
     def writer_loop(self, ser, is_running_event):
         while is_running_event.is_set():
@@ -340,7 +334,6 @@ class Processor:
                     is_running_event.clear()
                     break
             except EOFError:
-                print("...Luồng GỬI bị ngắt (EOF).")
                 is_running_event.clear()
                 break
 
