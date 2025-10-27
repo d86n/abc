@@ -1,12 +1,29 @@
 import ctypes
 import cv2
 import numpy as np
+import time
+import serial
+import threading
 
 def main():
     camera = Camera()
     camera_matrix, dist_coeffs = camera.load_data()
     aruco_markers = ArUcoMarkers(camera_matrix, dist_coeffs)
     processor = Processor(aruco_markers, camera)
+    serial_port = 'COM4'
+    baud_rate = 115200
+    is_running = True
+
+    ser = serial.Serial(serial_port, baud_rate, timeout=0.1, write_timeout=0, dsrdtr=False)
+    print("Chờ ESP32 khởi động... (3 giây)")
+    time.sleep(3)  # Cho ESP32 3 giây để khởi động lại
+    print("ESP32 đã sẵn sàng.")
+
+    serial_reader_thread = threading.Thread(target=processor.read_serial, args=(ser, is_running))
+    serial_reader_thread.daemon = True
+    serial_reader_thread.start()
+
+    processor.write_serial(ser)
 
     frame, cap = camera.run()
 
@@ -28,6 +45,7 @@ def main():
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
         cv2.imshow(window_name, frame)
 
+        # Mở cửa sổ ở chế độ tối đa
         ctypes.windll.user32.ShowWindow(ctypes.windll.user32.FindWindowW(None, window_name), 3)
 
         if cv2.waitKey(1) == ord('q'):
@@ -209,6 +227,33 @@ class Processor:
 
             return results
         return None
+
+    @staticmethod
+    def read_serial(ser, is_running):
+        while is_running:
+            try:
+                if ser.in_waiting > 0:
+                    line_bytes = ser.readline()
+                    line_string = line_bytes.decode("utf-8").strip()
+                    if line_string:
+                        print(f"\n[NHẬN TỪ SLAVE]: {line_string}")
+                time.sleep(0.01)
+            except serial.SerialException as e:
+                print(f"Lỗi Serial: {e}.")
+                break
+
+    @staticmethod
+    def write_serial(ser):
+        try:
+            data = input("Định dạng: 'ID,vx,vy':")
+
+            data_to_send = data + "\n"
+
+            ser.write(data_to_send.encode("utf-8"))
+        except ValueError:
+            print("Lỗi: Sai kiểu dữ liệu.")
+        except serial.SerialException as e:
+            print(f"Lỗi Serial: {e}.")
 
 if __name__ == "__main__":
     main()
