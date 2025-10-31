@@ -1,19 +1,18 @@
-// MAC Address: 14:33:5c:04:61:18
-
 #include <esp_now.h>
 #include <WiFi.h>
 
 #define TXD2 17
-#define RXD2 -1
+#define RXD2 16
 
 void OnDataRecv(const esp_now_recv_info_t *, const uint8_t *data, int len) {
   String msg = "";
   for (int i = 0; i < len; i++) msg += (char)data[i];
 
-  Serial.print("ESP32 nhận: ");
+  Serial.print("ESP32 nhận từ ESP-NOW: ");
   Serial.println(msg);
 
   Serial2.println(msg);  // Gửi sang Mega
+  Serial2.println("Đã chuyển sang Mega qua Serial2");
 }
 
 void setup() {
