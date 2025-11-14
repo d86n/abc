@@ -101,7 +101,6 @@ class Camera:
         if not ret:
             raise ValueError("Khong the mo camera")
 
-        # Cài đặt threading
         self.is_running = True
         self.lock = threading.Lock()
         self.thread = threading.Thread(target=self._update, daemon=True)
@@ -286,7 +285,7 @@ class Processor:
                     line_bytes = ser.readline()
                     line_string = line_bytes.decode("utf-8").strip()
                     if line_string:
-                        print(f"\n[NHẬN TỪ SLAVE]: {line_string}")
+                        print(f"\n[Nhan tu client]: {line_string}")
                 time.sleep(0.01)
             except serial.SerialException:
                 print("Loi serial")
@@ -306,13 +305,11 @@ class Processor:
             float(data_parts_list[1].strip())
             float(data_parts_list[2].strip())
 
-            # 4. Gửi dữ liệu (dạng Text + '\n')
             data_to_send = data_input_string + "\n"
 
             ser.write(data_to_send.encode('utf-8'))
 
             return True
-
         except ValueError:
             print("Sai kieu du lieu")
             return True
