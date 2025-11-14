@@ -1,4 +1,3 @@
-import ctypes
 import cv2
 import numpy as np
 import time
@@ -39,7 +38,7 @@ def main():
         if marker_positions is not None:
             aruco_markers.show_marker_positions(frame, marker_positions, ids, rvecs, tvecs)
 
-        cv2.putText(frame, f"Gui: {input_string}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+        cv2.putText(frame, f"Du lieu gui 'ID,vx,vy': {input_string}", (10, 60), cv2.FONT_HERSHEY_COMPLEX, 1.5, (0, 0, 255), 2)
 
         window_name = "Camera"
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
@@ -61,15 +60,13 @@ def main():
         elif key != 255:
             input_string += chr(key)
 
-        # ctypes.windll.user32.ShowWindow(ctypes.windll.user32.FindWindow(None, window_name), 3)
-
     camera.stop()
     ser.close()
     cv2.destroyAllWindows()
 
 class Serial:
     def __init__(self, processor, is_running_event):
-        self.serial_port = '/dev/ttyUSB0'
+        self.serial_port = 'COM4'
         self.baud_rate = 115200
         self.processor = processor
         self.is_running_event = is_running_event
@@ -110,7 +107,7 @@ class Camera:
 
         self.origin_position = (1800, 100)
 
-        self.cap = cv2.VideoCapture(2)
+        self.cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1900)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1000)
 
