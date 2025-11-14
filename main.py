@@ -14,13 +14,13 @@ def main():
     is_running_event = threading.Event()
     is_running_event.set()
 
-    ser = Serial(processor, is_running_event)
+    # ser = Serial(processor, is_running_event)
 
-    time.sleep(3)
+    # time.sleep(3)
 
-    ser.reader_thread()
+    # ser.reader_thread()
 
-    ser.writer_thread()
+    # ser.writer_thread()
 
     while is_running_event.is_set():
         ret, frame = camera.read_frame()
@@ -43,8 +43,7 @@ def main():
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
         cv2.imshow(window_name, frame)
 
-        # Mở cửa sổ ở chế độ tối đa
-        ctypes.windll.user32.ShowWindow(ctypes.windll.user32.FindWindow(None, window_name), 3)
+        # ctypes.windll.user32.ShowWindow(ctypes.windll.user32.FindWindow(None, window_name), 3)
 
         if cv2.waitKey(1) == ord('q'):
             is_running_event.clear()
@@ -52,7 +51,7 @@ def main():
 
     camera.stop()
 
-    ser.close()
+    # ser.close()
 
     cv2.destroyAllWindows()
 
@@ -87,8 +86,7 @@ class Camera:
         self.origin_position = (1800, 100)
 
         # Mở camera
-        self.cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
-        # Cài đặt thuộc tính ngay lập tức
+        self.cap = cv2.VideoCapture(2)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1900)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1000)
 
@@ -99,43 +97,32 @@ class Camera:
 
         # Cài đặt threading
         self.is_running = True
-        self.lock = threading.Lock()  # Khóa để tránh race condition
+        self.lock = threading.Lock()
         self.thread = threading.Thread(target=self._update, daemon=True)
         self.thread.start()
 
-    def update(self):
+    def _update(self):
         while self.is_running:
             ret, frame = self.cap.read()
             if ret:
-                # Dùng khóa để ghi đè self.frame một cách an toàn
                 with self.lock:
                     self.frame = frame
             else:
-                # Dừng nếu camera bị ngắt kết nối
                 self.is_running = False
 
     def read_frame(self):
-        """Lấy khung hình hiện tại (bản sao) một cách an toàn."""
         with self.lock:
-            # Trả về một bản sao để tránh bị luồng _update ghi đè
-            # khi đang xử lý
             if self.frame is None:
                 return False, None
             frame_copy = self.frame.copy()
         return True, frame_copy
 
     def stop(self):
-        """Dừng luồng và giải phóng camera."""
         self.is_running = False
-        self.thread.join()  # Đợi luồng kết thúc
+        self.thread.join()
         self.cap.release()
-        print("...Luồng Camera đã dừng.")
 
     def draw_global_reference_frame(self, frame_to_draw_on):
-        """
-        Vẽ hệ quy chiếu toàn cục LÊN KHUNG HÌNH ĐƯỢC CUNG CẤP.
-        (Sửa lại để nhận 'frame' làm tham số)
-        """
         cv2.circle(frame_to_draw_on, self.origin_position, 3, (0, 0, 255), -1)
         cv2.circle(frame_to_draw_on, self.origin_position, 5, (255, 255, 255), 2)
         axis_length = 150
@@ -152,8 +139,6 @@ class Camera:
 
     def load_data(self):
         return self.camera_matrix, self.dist_coeffs
-
-    # Hàm run(self) không còn cần thiết
 
 class ArUcoMarkers:
     def __init__(self, camera_matrix, dist_coeffs):
@@ -254,12 +239,10 @@ class Processor:
                     origin_index = i
                     break
 
-            # Sử dụng marker đầu tiên làm gốc nếu không có marker ID 0
             if origin_coordinates is None:
                 origin_coordinates = tvecs[0][0]
                 origin_index = 0
 
-            # Tính tọa độ tương đối so với marker ID 0
             results = []
             for i in range(len(ids)):
                 marker_id = ids[i][0]
@@ -306,20 +289,16 @@ class Processor:
     @staticmethod
     def write_serial(ser):
         try:
-            # 1. Nhận input (Hàm này sẽ chặn luồng GỬI)
             data_input_string = input("Định dạng: 'ID,vx,vy' (hoặc 'exit' để thoát): ")
 
-            # 2. Kiểm tra lệnh thoát
             if data_input_string.lower() == 'exit':
                 return False  # Trả về False để báo hiệu DỪNG
 
-            # 3. Kiểm tra định dạng (ví dụ: '1,2.2,3.3')
             data_parts_list = data_input_string.split(',')
             if len(data_parts_list) != 3:
                 print("Lỗi đầu vào: Phải nhập đúng 3 giá trị.")
                 return True  # Trả về True để TIẾP TỤC VÒNG LẶP
 
-            # Kiểm tra kiểu dữ liệu
             int(data_parts_list[0].strip())
             float(data_parts_list[1].strip())
             float(data_parts_list[2].strip())
@@ -329,7 +308,6 @@ class Processor:
 
             ser.write(data_to_send.encode('utf-8'))
 
-            # 5. Trả về True để TIẾP TỤC VÒNG LẶP
             return True
 
         except ValueError:
