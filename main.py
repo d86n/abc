@@ -10,30 +10,22 @@ def main():
     camera_matrix, dist_coeffs = camera.load_data()
     aruco_markers = ArUcoMarkers(camera_matrix, dist_coeffs)
     processor = Processor(aruco_markers, camera)
-    serial_port = 'COM4'
-    baud_rate = 115200
 
     is_running_event = threading.Event()
     is_running_event.set()
 
-    ser = serial.Serial(serial_port, baud_rate, timeout=0.1, write_timeout=0, dsrdtr=False)
+    ser = Serial(processor, is_running_event)
+
     time.sleep(3)
-    print("ESP32 đã sẵn sàng.")
 
-    serial_reader_thread = threading.Thread(target=processor.read_serial, args=(ser, is_running_event))
-    serial_reader_thread.daemon = True
-    serial_reader_thread.start()
+    ser.reader_thread()
 
-    serial_writer_thread = threading.Thread(target=processor.writer_loop,
-                                            args=(ser, is_running_event))
-    serial_writer_thread.daemon = True
-    serial_writer_thread.start()
+    ser.writer_thread()
 
     while is_running_event.is_set():
         ret, frame = camera.read_frame()
         if not ret:
-            print("Lỗi camera, đang thoát...")
-            is_running_event.clear()  # Báo cho các luồng khác dừng
+            is_running_event.clear()
             break
 
         _, ids, rvecs, tvecs = aruco_markers.detect_markers(frame)
@@ -52,7 +44,7 @@ def main():
         cv2.imshow(window_name, frame)
 
         # Mở cửa sổ ở chế độ tối đa
-        ctypes.windll.user32.ShowWindow(ctypes.windll.user32.FindWindowW(None, window_name), 3)
+        ctypes.windll.user32.ShowWindow(ctypes.windll.user32.FindWindow(None, window_name), 3)
 
         if cv2.waitKey(1) == ord('q'):
             is_running_event.clear()
@@ -64,6 +56,27 @@ def main():
 
     cv2.destroyAllWindows()
 
+class Serial:
+    def __init__(self, processor, is_running_event):
+        self.serial_port = 'COM4'
+        self.baud_rate = 115200
+        self.processor = processor
+        self.is_running_event = is_running_event
+
+    def run(self):
+        return serial.Serial(self.serial_port, self.baud_rate, timeout=0.1, write_timeout=0, dsrdtr=False)
+
+    def reader_thread(self):
+        ser = self.run()
+        serial_reader_thread = threading.Thread(target=self.processor.read_serial, args=(ser, self.is_running_event))
+        serial_reader_thread.daemon = True
+        serial_reader_thread.start()
+
+    def writer_thread(self):
+        ser = self.run()
+        serial_writer_thread = threading.Thread(target=self.processor.writer_loop, args=(ser, self.is_running_event))
+        serial_writer_thread.daemon = True
+        serial_writer_thread.start()
 
 class Camera:
     def __init__(self):
@@ -90,8 +103,7 @@ class Camera:
         self.thread = threading.Thread(target=self._update, daemon=True)
         self.thread.start()
 
-    def _update(self):
-        """Hàm chạy trong luồng riêng, liên tục cập nhật self.frame"""
+    def update(self):
         while self.is_running:
             ret, frame = self.cap.read()
             if ret:
