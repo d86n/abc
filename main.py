@@ -20,7 +20,7 @@ def main():
 
     ser.reader_thread()
 
-    ser.writer_thread()
+    input_string = ""
 
     while is_running_event.is_set():
         ret, frame = camera.read_frame()
@@ -39,25 +39,37 @@ def main():
         if marker_positions is not None:
             aruco_markers.show_marker_positions(frame, marker_positions, ids, rvecs, tvecs)
 
+        cv2.putText(frame, f"Gui: {input_string}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+
         window_name = "Camera"
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
         cv2.imshow(window_name, frame)
 
-        # ctypes.windll.user32.ShowWindow(ctypes.windll.user32.FindWindow(None, window_name), 3)
+        key = cv2.waitKey(1) & 0xFF
 
-        if cv2.waitKey(1) == ord('q'):
+        if key == ord('q'): # Nhan 'q' de thoat chuong trinh
             is_running_event.clear()
             break
+        elif key == 27: # Phim ESC
+            input_string = ""
+        elif key == 13: # Phim Enter
+            if input_string:
+                ser.write(input_string)
+                input_string = ""
+            else:
+                print("Khong gui gi")
+        elif key != 255:
+            input_string += chr(key)
+
+        # ctypes.windll.user32.ShowWindow(ctypes.windll.user32.FindWindow(None, window_name), 3)
 
     camera.stop()
-
-    # ser.close()
-
+    ser.close()
     cv2.destroyAllWindows()
 
 class Serial:
     def __init__(self, processor, is_running_event):
-        self.serial_port = 'COM4'
+        self.serial_port = '/dev/ttyUSB0'
         self.baud_rate = 115200
         self.processor = processor
         self.is_running_event = is_running_event
@@ -75,11 +87,16 @@ class Serial:
             serial_reader_thread.daemon = True
             serial_reader_thread.start()
 
-    def writer_thread(self):
-        if self.ser:
-            serial_writer_thread = threading.Thread(target=self.processor.writer_loop, args=(self.ser, self.is_running_event))
-            serial_writer_thread.daemon = True
-            serial_writer_thread.start()
+    def write(self, data_string):
+        if self.ser and self.ser.is_open:
+            try:
+                data_to_send = data_string + "\n"
+                self.ser.write(data_to_send.encode('utf-8'))
+                return True
+            except serial.SerialException:
+                print("Loi serial")
+                return False
+        return False
 
     def close(self):
         if self.ser and self.ser.is_open:
@@ -291,41 +308,41 @@ class Processor:
                 print("Loi serial")
                 break
 
-    @staticmethod
-    def write_serial(ser):
-        try:
-            data_input_string = input("Dinh dang: 'ID,vx,vy': ")
+    #@staticmethod
+    #def write_serial(ser):
+    #    try:
+    #        data_input_string = input("Dinh dang: 'ID,vx,vy': ")
 
-            data_parts_list = data_input_string.split(',')
-            if len(data_parts_list) != 3:
-                print("Nhap dung 3 gia tri")
-                return True
+    #        data_parts_list = data_input_string.split(',')
+    #        if len(data_parts_list) != 3:
+    #            print("Nhap dung 3 gia tri")
+    #            return True
 
-            int(data_parts_list[0].strip())
-            float(data_parts_list[1].strip())
-            float(data_parts_list[2].strip())
+    #        int(data_parts_list[0].strip())
+    #        float(data_parts_list[1].strip())
+    #        float(data_parts_list[2].strip())
 
-            data_to_send = data_input_string + "\n"
+    #        data_to_send = data_input_string + "\n"
 
-            ser.write(data_to_send.encode('utf-8'))
+    #        ser.write(data_to_send.encode('utf-8'))
 
-            return True
-        except ValueError:
-            print("Sai kieu du lieu")
-            return True
-        except serial.SerialException:
-            print("Loi serial")
-            return False
+    #        return True
+    #    except ValueError:
+    #        print("Sai kieu du lieu")
+    #        return True
+    #    except serial.SerialException:
+    #        print("Loi serial")
+    #        return False
 
-    def writer_loop(self, ser, is_running_event):
-        while is_running_event.is_set():
-            try:
-                if not self.write_serial(ser):
-                    is_running_event.clear()
-                    break
-            except EOFError:
-                is_running_event.clear()
-                break
+    #def writer_loop(self, ser, is_running_event):
+    #    while is_running_event.is_set():
+    #        try:
+    #            if not self.write_serial(ser):
+    #                is_running_event.clear()
+    #                break
+    #        except EOFError:
+    #            is_running_event.clear()
+    #            break
 
 if __name__ == "__main__":
     main()
