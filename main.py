@@ -305,41 +305,8 @@ class Processor:
                 print("Loi serial")
                 break
 
-    #@staticmethod
-    #def write_serial(ser):
-    #    try:
-    #        data_input_string = input("Dinh dang: 'ID,vx,vy': ")
-
-    #        data_parts_list = data_input_string.split(',')
-    #        if len(data_parts_list) != 3:
-    #            print("Nhap dung 3 gia tri")
-    #            return True
-
-    #        int(data_parts_list[0].strip())
-    #        float(data_parts_list[1].strip())
-    #        float(data_parts_list[2].strip())
-
-    #        data_to_send = data_input_string + "\n"
-
-    #        ser.write(data_to_send.encode('utf-8'))
-
-    #        return True
-    #    except ValueError:
-    #        print("Sai kieu du lieu")
-    #        return True
-    #    except serial.SerialException:
-    #        print("Loi serial")
-    #        return False
-
-    #def writer_loop(self, ser, is_running_event):
-    #    while is_running_event.is_set():
-    #        try:
-    #            if not self.write_serial(ser):
-    #                is_running_event.clear()
-    #                break
-    #        except EOFError:
-    #            is_running_event.clear()
-    #            break
+    def calc_vel(): # Ham tinh van toc tu vi tri can den de gui den robot
+        x_pre, y_pre = 0, 0
 
 if __name__ == "__main__":
     main()
