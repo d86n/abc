@@ -14,13 +14,13 @@ def main():
     is_running_event = threading.Event()
     is_running_event.set()
 
-    # ser = Serial(processor, is_running_event)
+    ser = Serial(processor, is_running_event)
 
-    # time.sleep(3)
+    time.sleep(3)
 
-    # ser.reader_thread()
+    ser.reader_thread()
 
-    # ser.writer_thread()
+    ser.writer_thread()
 
     while is_running_event.is_set():
         ret, frame = camera.read_frame()
@@ -61,21 +61,29 @@ class Serial:
         self.baud_rate = 115200
         self.processor = processor
         self.is_running_event = is_running_event
+        self.ser = None
 
-    def run(self):
-        return serial.Serial(self.serial_port, self.baud_rate, timeout=0.1, write_timeout=0, dsrdtr=False)
+        try:
+            self.ser = serial.Serial(self.serial_port, self.baud_rate, timeout=0.1, write_timeout=0, dsrdtr=False)
+        except serial.SerialException:
+            print(f"Khong the mo cong {self.serial_port}")
+            self.is_running_event.clear()
 
     def reader_thread(self):
-        ser = self.run()
-        serial_reader_thread = threading.Thread(target=self.processor.read_serial, args=(ser, self.is_running_event))
-        serial_reader_thread.daemon = True
-        serial_reader_thread.start()
+        if self.ser:
+            serial_reader_thread = threading.Thread(target=self.processor.read_serial, args=(self.ser, self.is_running_event))
+            serial_reader_thread.daemon = True
+            serial_reader_thread.start()
 
     def writer_thread(self):
-        ser = self.run()
-        serial_writer_thread = threading.Thread(target=self.processor.writer_loop, args=(ser, self.is_running_event))
-        serial_writer_thread.daemon = True
-        serial_writer_thread.start()
+        if self.ser:
+            serial_writer_thread = threading.Thread(target=self.processor.writer_loop, args=(self.ser, self.is_running_event))
+            serial_writer_thread.daemon = True
+            serial_writer_thread.start()
+
+    def close(self):
+        if self.ser and self.ser.is_open:
+            self.ser.close()
 
 class Camera:
     def __init__(self):
@@ -85,15 +93,13 @@ class Camera:
 
         self.origin_position = (1800, 100)
 
-        # Mở camera
         self.cap = cv2.VideoCapture(2)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1900)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1000)
 
-        # Đọc khung hình đầu tiên
         ret, self.frame = self.cap.read()
         if not ret:
-            raise ValueError("Không thể mở camera.")
+            raise ValueError("Khong the mo camera")
 
         # Cài đặt threading
         self.is_running = True
@@ -126,12 +132,12 @@ class Camera:
         cv2.circle(frame_to_draw_on, self.origin_position, 3, (0, 0, 255), -1)
         cv2.circle(frame_to_draw_on, self.origin_position, 5, (255, 255, 255), 2)
         axis_length = 150
-        # Trục x
+
         x_end = (self.origin_position[0] - axis_length, self.origin_position[1])
         cv2.arrowedLine(frame_to_draw_on, self.origin_position, x_end, (0, 0, 255), 2)
         cv2.putText(frame_to_draw_on, 'x', (x_end[0] - 20, x_end[1]),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-        # Trục y
+
         y_end = (self.origin_position[0], self.origin_position[1] + axis_length)
         cv2.arrowedLine(frame_to_draw_on, self.origin_position, y_end, (0, 255, 0), 2)
         cv2.putText(frame_to_draw_on, 'y', (y_end[0] + 10, y_end[1]),
@@ -209,7 +215,7 @@ class ArUcoMarkers:
                         color = (255, 255, 255)
 
                         coord_text = f"({x:.2f},{y:.2f})"
-                        angle_text = f"{angle:.0f} degrees"
+                        angle_text = f"{angle:.0f} do"
 
                         cv2.rectangle(frame, (text_pos[0] - 5, text_pos[1] - 15),
                                      (text_pos[0] + 90, text_pos[1] + 35), (0, 0, 0), -1)
@@ -282,22 +288,19 @@ class Processor:
                     if line_string:
                         print(f"\n[NHẬN TỪ SLAVE]: {line_string}")
                 time.sleep(0.01)
-            except serial.SerialException as e:
-                print(f"Lỗi Serial: {e}.")
+            except serial.SerialException:
+                print("Loi serial")
                 break
 
     @staticmethod
     def write_serial(ser):
         try:
-            data_input_string = input("Định dạng: 'ID,vx,vy' (hoặc 'exit' để thoát): ")
-
-            if data_input_string.lower() == 'exit':
-                return False  # Trả về False để báo hiệu DỪNG
+            data_input_string = input("Dinh dang: 'ID,vx,vy': ")
 
             data_parts_list = data_input_string.split(',')
             if len(data_parts_list) != 3:
-                print("Lỗi đầu vào: Phải nhập đúng 3 giá trị.")
-                return True  # Trả về True để TIẾP TỤC VÒNG LẶP
+                print("Nhap dung 3 gia tri")
+                return True
 
             int(data_parts_list[0].strip())
             float(data_parts_list[1].strip())
@@ -311,11 +314,11 @@ class Processor:
             return True
 
         except ValueError:
-            print("Lỗi: Sai kiểu dữ liệu. Phải là số.")
-            return True  # Vẫn tiếp tục vòng lặp
-        except serial.SerialException as e:
-            print(f"Lỗi Serial: {e}.")
-            return False  # Dừng nếu lỗi serial
+            print("Sai kieu du lieu")
+            return True
+        except serial.SerialException:
+            print("Loi serial")
+            return False
 
     def writer_loop(self, ser, is_running_event):
         while is_running_event.is_set():
